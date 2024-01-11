@@ -1,7 +1,10 @@
+                      License of leisquid/DiffSinger
+
   For the unchanged part of openvpi/DiffSinger, this Diffsinger repository is
-licensed under the Apache 2.0 License; for the modified part of
-leisquid/DiffSinger, this Diffsinger repository is licensed under the GNU
-Affero General Public License.
+licensed under the Apache 2.0 License starting at line 14 of this license; for
+the modified part of leisquid/DiffSinger, this Diffsinger repository is
+licensed under the GNU Affero General Public License starting at line 226 of
+this license.
 
   This following text is the full text of the Apache 2.0 License and the
 original author's copyright notice.
@@ -885,12 +888,12 @@ For more information on this, and how to apply and follow the GNU AGPL, see
 
                    Copyright (c) 2023-24 Leisquid Li.
 
-  The modified part of DiffSinger is licensed under the GNU Affero General
+  The modified parts of DiffSinger are licensed under the GNU Affero General
 Public License version 3 published by the Free Software Foundation and without
 any warranty for liability or particular purpose.
 
-  You can modify and/or redistribute it under the GNU Affero General Public
-License version 3 or any later version you want.
+  You can modify and/or redistribute leisquid/DiffSinger under the GNU Affero
+General Public License version 3 or any later version you want.
 
   For more details, please see <https://www.gnu.org/licenses/>.
 
