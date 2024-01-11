@@ -73,7 +73,7 @@ Here is the Readme content of leisquid/DiffSinger.
 
 ## leisquid/DiffSinger: Why I forked this repository
 
-If I just forked this repo, I'm not contributing anything to the project. But the only thing I'm afraid of is that something I like, love, or just care about suddenly disappear and I'll be able to find it nowhere, so it's better to own it ahead of time.
+If I just forked this repo, I'm not contributing anything to the project. But the only thing I'm afraid of is that something I like, love, or just care about suddenly disappears and I'll be able to find it nowhere, so it's better to own it ahead of time.
 
 如果只是 fork 仓库的话，那么我对这个项目没有任何贡献。但是我就唯独害怕自己喜欢、钟爱、或者只是自己关心的东西突然消失不见，而且到处找不到，不如提前拿到自己的手里更安心。
 
