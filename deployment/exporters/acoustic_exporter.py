@@ -5,9 +5,11 @@ from typing import List, Union, Tuple, Dict
 import onnx
 import onnxsim
 import torch
+import yaml
 
 from basics.base_exporter import BaseExporter
 from deployment.modules.toplevel import DiffSingerAcousticONNX
+from modules.fastspeech.param_adaptor import VARIANCE_CHECKLIST
 from utils import load_ckpt, onnx_helper, remove_suffix
 from utils.hparams import hparams
 from utils.phoneme_utils import locate_dictionary, build_phoneme_list
@@ -58,7 +60,7 @@ class DiffSingerAcousticExporter(BaseExporter):
             if hparams['use_spk_id'] else None
         self.export_spk: List[Tuple[str, Dict[str, float]]] = export_spk \
             if hparams['use_spk_id'] and export_spk is not None else []
-        if hparams.get('use_key_shift_embed', False) and not self.expose_gender:
+        if hparams['use_key_shift_embed'] and not self.expose_gender:
             shift_min, shift_max = hparams['augmentation_args']['random_pitch_shifting']['range']
             key_shift = freeze_gender * shift_max if freeze_gender >= 0. else freeze_gender * abs(shift_min)
             key_shift = max(min(key_shift, shift_max), shift_min)  # clip key shift
@@ -112,6 +114,48 @@ class DiffSingerAcousticExporter(BaseExporter):
         self._export_dictionary(path / 'dictionary.txt')
         self._export_phonemes(path / f'{self.model_name}.phonemes.txt')
 
+        model_name = self.model_name
+        if self.freeze_spk is not None:
+            model_name += '.' + self.freeze_spk[0]
+        dsconfig = {
+            # basic configs
+            'phonemes': f'{self.model_name}.phonemes.txt',
+            'acoustic': f'{model_name}.onnx',
+            'hidden_size': hparams['hidden_size'],
+            'vocoder': 'nsf_hifigan_44.1k_hop512_128bin_2024.02',
+        }
+        # multi-speaker
+        if len(self.export_spk) > 0:
+            dsconfig['speakers'] = [f'{self.model_name}.{spk[0]}' for spk in self.export_spk]
+        # parameters
+        if self.expose_gender:
+            dsconfig['augmentation_args'] = {
+                'random_pitch_shifting': {
+                    'range': hparams['augmentation_args']['random_pitch_shifting']['range']
+                }
+            }
+        dsconfig['use_key_shift_embed'] = self.expose_gender
+        dsconfig['use_speed_embed'] = self.expose_velocity
+        for variance in VARIANCE_CHECKLIST:
+            dsconfig[f'use_{variance}_embed'] = (variance in self.model.fs2.variance_embed_list)
+        # shallow diffusion
+        dsconfig['use_shallow_diffusion'] = self.model.use_shallow_diffusion
+        dsconfig['max_depth'] = self.model.diffusion.k_step
+        # mel specification
+        dsconfig['sample_rate'] = hparams['audio_sample_rate']
+        dsconfig['hop_size'] = hparams['hop_size']
+        dsconfig['win_size'] = hparams['win_size']
+        dsconfig['fft_size'] = hparams['fft_size']
+        dsconfig['num_mel_bins'] = hparams['audio_num_mel_bins']
+        dsconfig['mel_fmin'] = hparams['fmin']
+        dsconfig['mel_fmax'] = hparams['fmax'] if hparams['fmax'] is not None else hparams['audio_sample_rate'] / 2
+        dsconfig['mel_base'] = str(hparams.get('mel_base', '10'))
+        dsconfig['mel_scale'] = 'slaney'
+        config_path = path / 'dsconfig.yaml'
+        with open(config_path, 'w', encoding='utf8') as fw:
+            yaml.safe_dump(dsconfig, fw, sort_keys=False)
+        print(f'| export configs => {config_path} **PLEASE EDIT BEFORE USE**')
+
     @torch.no_grad()
     def _torch_export_model(self):
         # Prepare inputs for FastSpeech2 and aux decoder tracing
@@ -143,14 +187,14 @@ class DiffSingerAcousticExporter(BaseExporter):
                 for v_name in self.model.fs2.variance_embed_list
             }
         }
-        if hparams.get('use_key_shift_embed', False):
+        if hparams['use_key_shift_embed']:
             if self.expose_gender:
                 kwargs['gender'] = torch.rand((1, n_frames), dtype=torch.float32, device=self.device)
                 input_names.append('gender')
                 dynamix_axes['gender'] = {
                     1: 'n_frames'
                 }
-        if hparams.get('use_speed_embed', False):
+        if hparams['use_speed_embed']:
             if self.expose_velocity:
                 kwargs['velocity'] = torch.rand((1, n_frames), dtype=torch.float32, device=self.device)
                 input_names.append('velocity')

@@ -5,9 +5,11 @@ from typing import Union, List, Tuple, Dict
 import onnx
 import onnxsim
 import torch
+import yaml
 
 from basics.base_exporter import BaseExporter
 from deployment.modules.toplevel import DiffSingerVarianceONNX
+from modules.fastspeech.param_adaptor import VARIANCE_CHECKLIST
 from utils import load_ckpt, onnx_helper, remove_suffix
 from utils.hparams import hparams
 from utils.phoneme_utils import locate_dictionary, build_phoneme_list
@@ -142,6 +144,38 @@ class DiffSingerVarianceExporter(BaseExporter):
             )
         self._export_dictionary(path / 'dictionary.txt')
         self._export_phonemes((path / f'{self.model_name}.phonemes.txt'))
+
+        model_name = self.model_name
+        if self.freeze_spk is not None:
+            model_name += '.' + self.freeze_spk[0]
+        dsconfig = {
+            # basic configs
+            'phonemes': f'{self.model_name}.phonemes.txt',
+            'linguistic': f'{model_name}.linguistic.onnx',
+            'hidden_size': self.model.hidden_size,
+            'predict_dur': self.model.predict_dur,
+        }
+        # multi-speaker
+        if len(self.export_spk) > 0:
+            dsconfig['speakers'] = [f'{self.model_name}.{spk[0]}' for spk in self.export_spk]
+        # functionalities
+        if self.model.predict_dur:
+            dsconfig['dur'] = f'{model_name}.dur.onnx'
+        if self.model.predict_pitch:
+            dsconfig['pitch'] = f'{model_name}.pitch.onnx'
+            dsconfig['use_expr'] = self.expose_expr
+            dsconfig['use_note_rest'] = self.model.use_melody_encoder
+        if self.model.predict_variances:
+            dsconfig['variance'] = f'{model_name}.variance.onnx'
+            for variance in VARIANCE_CHECKLIST:
+                dsconfig[f'predict_{variance}'] = (variance in self.model.variance_prediction_list)
+        # frame specifications
+        dsconfig['sample_rate'] = hparams['audio_sample_rate']
+        dsconfig['hop_size'] = hparams['hop_size']
+        config_path = path / 'dsconfig.yaml'
+        with open(config_path, 'w', encoding='utf8') as fw:
+            yaml.safe_dump(dsconfig, fw, sort_keys=False)
+        print(f'| export configs => {config_path} **PLEASE EDIT BEFORE USE**')
 
     @torch.no_grad()
     def _torch_export_model(self):
@@ -693,12 +727,12 @@ class DiffSingerVarianceExporter(BaseExporter):
 
         ignored_variance_names = '|'.join([f'({v_name})' for v_name in self.model.variance_prediction_list])
         onnx_helper.model_add_prefixes(
-            var_pre, node_prefix='/pre', value_info_prefix='/pre',
+            var_pre, node_prefix='/pre', value_info_prefix='/pre', initializer_prefix='/pre',
             ignored_pattern=fr'.*((embed)|{ignored_variance_names}).*'
         )
         onnx_helper.model_add_prefixes(var_pre, dim_prefix='pre.', ignored_pattern='(n_tokens)|(n_frames)')
         onnx_helper.model_add_prefixes(
-            var_post, node_prefix='/post', value_info_prefix='/post',
+            var_post, node_prefix='/post', value_info_prefix='/post', initializer_prefix='/post',
             ignored_pattern=None
         )
         onnx_helper.model_add_prefixes(var_post, dim_prefix='post.', ignored_pattern='n_frames')

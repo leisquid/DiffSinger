@@ -23,13 +23,17 @@ class AcousticDataset(BaseDataset):
     def __init__(self, prefix, preload=False):
         super(AcousticDataset, self).__init__(prefix, hparams['dataset_size_key'], preload)
         self.required_variances = {}  # key: variance name, value: padding value
-        if hparams.get('use_energy_embed', False):
+        if hparams['use_energy_embed']:
             self.required_variances['energy'] = 0.0
-        if hparams.get('use_breathiness_embed', False):
+        if hparams['use_breathiness_embed']:
             self.required_variances['breathiness'] = 0.0
+        if hparams['use_voicing_embed']:
+            self.required_variances['voicing'] = 0.0
+        if hparams['use_tension_embed']:
+            self.required_variances['tension'] = 0.0
 
-        self.need_key_shift = hparams.get('use_key_shift_embed', False)
-        self.need_speed = hparams.get('use_speed_embed', False)
+        self.need_key_shift = hparams['use_key_shift_embed']
+        self.need_speed = hparams['use_speed_embed']
         self.need_spk_id = hparams['use_spk_id']
 
     def collater(self, samples):
@@ -74,10 +78,14 @@ class AcousticTask(BaseTask):
             self.vocoder: BaseVocoder = get_vocoder_cls(hparams)()
         self.logged_gt_wav = set()
         self.required_variances = []
-        if hparams.get('use_energy_embed', False):
+        if hparams['use_energy_embed']:
             self.required_variances.append('energy')
-        if hparams.get('use_breathiness_embed', False):
+        if hparams['use_breathiness_embed']:
             self.required_variances.append('breathiness')
+        if hparams['use_voicing_embed']:
+            self.required_variances.append('voicing')
+        if hparams['use_tension_embed']:
+            self.required_variances.append('tension')
         super()._finish_init()
 
     def _build_model(self):
@@ -148,7 +156,7 @@ class AcousticTask(BaseTask):
         if sample['size'] > 0 and min(sample['indices']) < hparams['num_valid_plots']:
             mel_out: ShallowDiffusionOutput = self.run_model(sample, infer=True)
             for i in range(len(sample['indices'])):
-                data_idx = sample['indices'][i]
+                data_idx = sample['indices'][i].item()
                 if data_idx < hparams['num_valid_plots']:
                     if self.use_vocoder:
                         self.plot_wav(
@@ -162,7 +170,6 @@ class AcousticTask(BaseTask):
                     if mel_out.diff_out is not None:
                         self.plot_mel(data_idx, sample['mel'][i], mel_out.diff_out[i], 'diffmel')
         return losses, sample['size']
-
 
     ############
     # validation plots
